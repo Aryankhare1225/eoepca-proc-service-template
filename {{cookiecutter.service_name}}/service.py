@@ -1,22 +1,7 @@
 # see https://zoo-project.github.io/workshops/2014/first_service.html#f1
 import pathlib
 
-try:
-    import zoo
-except ImportError:
 
-    class ZooStub(object):
-        def __init__(self):
-            self.SERVICE_SUCCEEDED = 3
-            self.SERVICE_FAILED = 4
-
-        def update_status(self, conf, progress):
-            print(f"Status {progress}")
-
-        def _(self, message):
-            print(f"invoked _ with {message}")
-
-    zoo = ZooStub()
 
 import json
 import os
@@ -32,7 +17,16 @@ from botocore.exceptions import ClientError
 from loguru import logger
 from pystac import read_file
 from pystac.stac_io import DefaultStacIO, StacIO
-from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
+
+from zoo_calrissian_runner import ZooCalrissianRunner
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../zoo-runner-common')))
+from base_handler import ExecutionHandler
+
+
+from zoostub import ZooStub
+zoo = ZooStub()
+
 from botocore.client import Config
 from pystac.item_collection import ItemCollection
 
