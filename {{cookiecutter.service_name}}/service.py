@@ -20,8 +20,11 @@ from pystac.stac_io import DefaultStacIO, StacIO
 
 from zoo_calrissian_runner import ZooCalrissianRunner
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../zoo-runner-common')))
-from base_handler import ExecutionHandler
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../zoo-runner-common')))
+#from base_handler import ExecutionHandler
+
+from common_execution_handler import CommonExecutionHandler
+from common_stac_io import CustomStacIO
 
 
 from zoostub import ZooStub
@@ -37,53 +40,12 @@ logger.remove()
 logger.add(sys.stderr, level="INFO")
 
 
-class CustomStacIO(DefaultStacIO):
-    """Custom STAC IO class that uses boto3 to read from S3."""
-
-    def __init__(self):
-        self.session = botocore.session.Session()
-        self.s3_client = self.session.create_client(
-            service_name="s3",
-            region_name=os.environ.get("AWS_REGION"),
-            endpoint_url=os.environ.get("AWS_S3_ENDPOINT"),
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-            verify=True,
-            use_ssl=True,
-            config=Config(s3={"addressing_style": "path", "signature_version": "s3v4"}),
-        )
-
-    def read_text(self, source, *args, **kwargs):
-        parsed = urlparse(source)
-        if parsed.scheme == "s3":
-            return (
-                self.s3_client.get_object(Bucket=parsed.netloc, Key=parsed.path[1:])[
-                    "Body"
-                ]
-                .read()
-                .decode("utf-8")
-            )
-        else:
-            return super().read_text(source, *args, **kwargs)
-
-    def write_text(self, dest, txt, *args, **kwargs):
-        parsed = urlparse(dest)
-        if parsed.scheme == "s3":
-            self.s3_client.put_object(
-                Body=txt.encode("UTF-8"),
-                Bucket=parsed.netloc,
-                Key=parsed.path[1:],
-                ContentType="application/geo+json",
-            )
-        else:
-            super().write_text(dest, txt, *args, **kwargs)
-
 
 StacIO.set_default(CustomStacIO)
 
 
-class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
-    def __init__(self, conf):
+class EoepcaCalrissianRunnerExecutionHandler(CommonExecutionHandler):
+    def __init__(self, conf, **kwargs):
         super().__init__()
         self.conf = conf
 
@@ -113,7 +75,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
         self.init_config_defaults(self.conf)
 
-    def pre_execution_hook(self):
+    def pre_execution_hook(self, **kwargs):
         try:
             logger.info("Pre execution hook")
             self.unset_http_proxy_env()
@@ -194,7 +156,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         finally:
             self.restore_http_proxy_env()
 
-    def post_execution_hook(self, log, output, usage_report, tool_logs):
+    def post_execution_hook(self, log, output, usage_report, tool_logs, **kwargs):
         try:
             logger.info("Post execution hook")
             self.unset_http_proxy_env()
@@ -292,7 +254,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         finally:
             self.restore_http_proxy_env()
 
-    def unset_http_proxy_env(self):
+    def unset_http_proxy_env(self, **kwargs):
         http_proxy = os.environ.pop("HTTP_PROXY", None)
         logger.info(f"Unsetting env HTTP_PROXY, whose value was {http_proxy}")
 
@@ -328,7 +290,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         return None
 
     @staticmethod
-    def local_get_file(fileName):
+    def local_get_file(fileName, **kwargs):
         """
         Read and load the contents of a yaml file
 
@@ -348,27 +310,8 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         except yaml.scanner.ScannerError:
             return {}
 
-    def get_pod_env_vars(self):
-        logger.info("get_pod_env_vars")
 
-        return self.conf.get("pod_env_vars", {})
-
-    def get_pod_node_selector(self):
-        logger.info("get_pod_node_selector")
-
-        return self.conf.get("pod_node_selector", {})
-
-    def get_secrets(self):
-        logger.info("get_secrets")
-
-        return self.local_get_file("/assets/pod_imagePullSecrets.yaml")
-
-    def get_additional_parameters(self):
-        logger.info("get_additional_parameters")
-
-        return self.conf.get("additional_parameters", {})
-
-    def handle_outputs(self, log, output, usage_report, tool_logs):
+    def handle_outputs(self, log, output, usage_report, tool_logs, **kwargs):
         """
         Handle the output files of the execution.
 
